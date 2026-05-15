@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technician Skill Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+:root {
+  --bg: #f2f1ed; --surface: #ffffff; --surface2: #f0efe9; --surface3: #e8e7e0;
+  --border: #e0dfd7; --border2: #c8c6bc;
+  --text: #1a1916; --text2: #6b6860; --text3: #9e9c95;
+  --green: #2d7a4f; --green-bg: #e8f5ee; --green-border: #7ecfa0;
+  --amber: #b45309; --amber-bg: #fef3e0; --amber-border: #f0c46a;
+  --red: #c0392b; --red-bg: #fdf0ee;
+  --radius: 10px; --radius-sm: 6px; --sidebar-w: 224px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.1), 0 2px 4px rgba(0,0,0,.05);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+.app { display: flex; min-height: 100vh; }
+
+/* ── Sidebar ── */
+.sidebar { width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; box-shadow: var(--shadow); }
+.sidebar-logo { padding: .875rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 9px; }
+.logo-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--green); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.logo-icon svg { width: 17px; height: 17px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.logo-text { font-size: 13px; font-weight: 600; color: var(--text); }
+.logo-sub { font-size: 10px; color: var(--text3); }
+.sl { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; padding: .7rem 1rem .3rem; }
+.sidebar-actions { padding: 0 .6rem .4rem; display: flex; flex-direction: column; gap: 3px; }
+.sb-btn { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; border: none; background: transparent; color: var(--text2); transition: all .12s; text-align: left; width: 100%; }
+.sb-btn svg { width: 14px; height: 14px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+.sb-btn:hover { background: var(--surface2); color: var(--text); }
+.sb-btn.primary { background: var(--green); color: white; }
+.sb-btn.primary:hover { background: #246640; }
+.candidates-list { flex: 1; overflow-y: auto; padding: 0 .6rem .6rem; display: flex; flex-direction: column; gap: 2px; }
+.cand-item { display: flex; align-items: center; border-radius: var(--radius-sm); cursor: pointer; transition: background .12s; border: 1px solid transparent; }
+.cand-item:hover { background: var(--surface2); }
+.cand-item.active { background: var(--green-bg); border-color: var(--green-border); }
+.cand-btn { flex: 1; display: flex; align-items: center; gap: 9px; padding: 7px 9px; background: none; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; text-align: left; min-width: 0; }
+.cand-avatar { width: 27px; height: 27px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; }
+.cand-name { font-size: 12px; font-weight: 500; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cand-item.active .cand-name { color: var(--green); }
+.cand-prog { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; }
+.cand-item.active .cand-prog { color: var(--green); opacity: .8; }
+.cand-del { width: 24px; height: 24px; border-radius: 4px; background: none; border: none; cursor: pointer; color: var(--text3); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .12s, color .12s; flex-shrink: 0; margin-right: 4px; }
+.cand-item:hover .cand-del { opacity: 1; }
+.cand-del:hover { color: var(--red); }
+.cand-del svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sidebar-footer { border-top: 1px solid var(--border); padding: .6rem; display: flex; flex-direction: column; gap: 3px; }
+
+/* ── Sync indicator ── */
+.sync-bar { display: flex; align-items: center; gap: 6px; padding: 5px 9px 3px; font-size: 10px; color: var(--text3); }
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); flex-shrink: 0; transition: background .3s; }
+.sync-dot.syncing { background: var(--amber); animation: pulse 1s infinite; }
+.sync-dot.saved { background: var(--green); }
+.sync-dot.error { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* ── Main ── */
+.main-area { margin-left: var(--sidebar-w); flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.5rem; position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 12px; height: 54px; box-shadow: var(--shadow); }
+.topbar-name { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-meta { font-size: 12px; color: var(--text3); white-space: nowrap; }
+.topbar-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.btn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border2); border-radius: var(--radius-sm); padding: 5px 11px; font-size: 12px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; background: var(--surface); color: var(--text); transition: all .12s; white-space: nowrap; }
+.btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn:hover { background: var(--surface2); border-color: var(--green); color: var(--green); }
+.btn-primary { background: var(--green); color: white; border-color: var(--green); }
+.btn-primary:hover { background: #246640; border-color: #246640; color: white; }
+.content { padding: 1.25rem 1.5rem; flex: 1; }
+
+/* ── Loading overlay ── */
+#loading-overlay { position: fixed; inset: 0; background: var(--bg); z-index: 500; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+#loading-overlay.hidden { display: none; }
+.spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { font-size: 13px; color: var(--text3); }
+
+/* ── Empty state ── */
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 55vh; text-align: center; }
+.empty-state svg { width: 44px; height: 44px; stroke: var(--border2); fill: none; stroke-width: 1.5; margin-bottom: .875rem; }
+.empty-state h2 { font-size: 17px; font-weight: 500; color: var(--text2); margin-bottom: .4rem; }
+.empty-state p { font-size: 13px; color: var(--text3); max-width: 260px; }
+
+/* ── Edit bar ── */
+.edit-bar { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem 1.125rem; margin-bottom: 1.125rem; box-shadow: var(--shadow); flex-wrap: wrap; }
+.ef { display: flex; flex-direction: column; gap: 3px; }
+.ef label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; }
+.ef input { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 5px 9px; font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text); background: var(--surface2); transition: border-color .12s; }
+.ef input:focus { outline: none; border-color: var(--green); }
+
+/* ── Stats ── */
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 1.125rem; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .8rem 1rem; box-shadow: var(--shadow); }
+.stat-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 5px; }
+.stat-value { font-size: 24px; font-weight: 600; color: var(--text); letter-spacing: -.02em; line-height: 1; }
+.stat-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+/* ── Sections ── */
+.section-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 9px; box-shadow: var(--shadow); overflow: hidden; }
+.section-header { display: flex; align-items: center; gap: 10px; padding: .75rem 1.125rem; cursor: pointer; user-select: none; transition: background .1s; }
+.section-header:hover { background: var(--surface2); }
+.section-header.open { border-bottom: 1px solid var(--border); }
+.sdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; }
+.prog-track { width: 76px; height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 2px; transition: width .3s ease; }
+.section-count { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); min-width: 36px; text-align: right; }
+.chevron { width: 14px; height: 14px; stroke: var(--text3); fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: transform .18s; flex-shrink: 0; }
+.chevron.open { transform: rotate(180deg); }
+
+/* ── Table ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; min-width: 700px; }
+thead th { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .07em; padding: .4rem .75rem; text-align: left; background: var(--surface2); border-bottom: 1px solid var(--border); white-space: nowrap; }
+tbody td { padding: .38rem .75rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #fafaf8; }
+tr.flag-red td { background: #fff7f6 !important; }
+tr.flag-yellow td { background: #fffdf0 !important; }
+.status-btn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid transparent; border-radius: 20px; padding: 3px 9px; font-size: 11px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; white-space: nowrap; transition: all .12s; }
+.status-btn svg { width: 11px; height: 11px; stroke: currentColor; fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.st-none { background: var(--surface2); color: var(--text3); border-color: var(--border); }
+.st-needs { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-border); }
+.st-can   { background: var(--green-bg); color: var(--green); border-color: var(--green-border); }
+.att-wrap { display: inline-flex; align-items: center; gap: 3px; }
+.att-btn { width: 19px; height: 19px; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; background: var(--surface2); font-size: 13px; display: flex; align-items: center; justify-content: center; color: var(--text2); font-family: 'DM Sans', sans-serif; transition: all .1s; }
+.att-btn:hover { background: var(--surface); border-color: var(--green); color: var(--green); }
+.att-count { font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; min-width: 20px; text-align: center; }
+.stars { display: inline-flex; gap: 1px; }
+.star { font-size: 14px; cursor: pointer; color: var(--border2); transition: color .1s; line-height: 1; }
+.star.on { color: #d97706; }
+.flags { display: inline-flex; gap: 2px; }
+.flag-btn { font-size: 12px; cursor: pointer; opacity: .22; border: none; background: transparent; padding: 0 1px; transition: opacity .1s, transform .1s; line-height: 1; }
+.flag-btn:hover { opacity: .6; transform: scale(1.15); }
+.flag-btn.on { opacity: 1; }
+.cell-input { background: transparent; border: none; border-bottom: 1px solid transparent; font-size: 12px; color: var(--text); padding: 2px 3px; width: 100%; outline: none; font-family: 'DM Sans', sans-serif; transition: border-color .12s; }
+.cell-input:focus { border-bottom-color: var(--green); }
+.cell-input::placeholder { color: var(--text3); }
+.date-input { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 2px 5px; background: var(--surface2); cursor: pointer; width: 126px; transition: border-color .12s; }
+.date-input:focus { outline: none; border-color: var(--green); }
+.legend { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 1rem; padding: .45rem .875rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 11px; color: var(--text3); }
+.legend strong { color: var(--text2); font-weight: 600; }
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(195px,1fr)); gap: 9px; }
+.ov-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: .875rem 1rem; box-shadow: var(--shadow); cursor: pointer; transition: all .12s; }
+.ov-card:hover { border-color: var(--green); box-shadow: 0 2px 10px rgba(45,122,79,.12); transform: translateY(-1px); }
+.ov-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; margin-bottom: .5rem; }
+.ov-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; color: var(--text); }
+.ov-date { font-size: 11px; color: var(--text3); margin-bottom: .5rem; }
+.ov-bar-track { height: 4px; background: var(--surface3); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+.ov-bar-fill { height: 100%; border-radius: 2px; }
+.ov-pct { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); }
+
+/* ── Modals ── */
+.backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.38); z-index: 200; align-items: center; justify-content: center; }
+.backdrop.open { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius); padding: 1.375rem; width: 420px; max-width: 92vw; box-shadow: var(--shadow-md); }
+.modal h3 { font-size: 15px; font-weight: 600; margin-bottom: .5rem; }
+.modal p { font-size: 13px; color: var(--text2); margin-bottom: 1rem; line-height: 1.5; }
+.modal-row { display: flex; flex-direction: column; gap: 5px; margin-bottom: .875rem; }
+.modal-label { font-size: 12px; font-weight: 500; color: var(--text2); }
+.modal-input { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 10px; font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--text); background: var(--surface2); transition: border-color .12s; width: 100%; }
+.modal-input:focus { outline: none; border-color: var(--green); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.drop-area { border: 2px dashed var(--border2); border-radius: var(--radius-sm); padding: 1.75rem; text-align: center; color: var(--text3); font-size: 13px; cursor: pointer; margin-bottom: 1rem; transition: all .12s; }
+.drop-area:hover, .drop-area.drag-over { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+.drop-area svg { display: block; margin: 0 auto 9px; }
+
+/* ── Toast ── */
+.toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(60px); background: var(--text); color: white; padding: 8px 18px; border-radius: 20px; font-size: 12px; font-weight: 500; transition: transform .22s ease; z-index: 999; pointer-events: none; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── Lock screen ── */
+#lock-screen { position: fixed; inset: 0; z-index: 1000; background: linear-gradient(135deg, #1a2e22 0%, #0f1a14 100%); display: flex; align-items: center; justify-content: center; flex-direction: column; }
+#lock-screen.hidden { display: none; }
+.lock-card { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 2.5rem 2.25rem; width: 340px; max-width: 92vw; text-align: center; backdrop-filter: blur(12px); box-shadow: 0 24px 60px rgba(0,0,0,.4); }
+.lock-icon { width: 52px; height: 52px; border-radius: 14px; background: var(--green); display: flex; align-items: center; justify-content: center; margin: 0 auto 1.25rem; box-shadow: 0 4px 18px rgba(45,122,79,.5); }
+.lock-icon svg { width: 26px; height: 26px; stroke: white; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lock-title { font-size: 20px; font-weight: 600; color: white; margin-bottom: 4px; letter-spacing: -.02em; }
+.lock-sub { font-size: 13px; color: rgba(255,255,255,.45); margin-bottom: 1.75rem; }
+.pin-dots { display: flex; justify-content: center; gap: 10px; margin-bottom: 1.5rem; }
+.pin-dot { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(255,255,255,.3); background: transparent; transition: all .15s; }
+.pin-dot.filled { background: var(--green); border-color: var(--green); box-shadow: 0 0 8px rgba(45,122,79,.6); }
+.pin-dot.error { background: #e55; border-color: #e55; box-shadow: 0 0 8px rgba(220,80,80,.6); }
+.numpad { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: .875rem; }
+.num-btn { height: 58px; border-radius: 12px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.07); color: white; font-size: 20px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .12s; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 1px; }
+.num-btn:hover { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.22); }
+.num-btn:active { transform: scale(.95); }
+.num-sub { font-size: 8px; font-weight: 500; letter-spacing: .1em; color: rgba(255,255,255,.35); }
+.num-btn.del-btn { font-size: 15px; }
+.num-btn.zero-btn { grid-column: 2; }
+.lock-err { font-size: 12px; color: #f87171; min-height: 18px; margin-top: .25rem; }
+.lock-footer { margin-top: 1.25rem; font-size: 11px; color: rgba(255,255,255,.25); }
+.pin-input-row { display: flex; gap: 8px; justify-content: center; margin-bottom: .5rem; }
+.pin-char { width: 44px; height: 52px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface2); text-align: center; font-size: 22px; font-family: 'DM Mono', monospace; color: var(--text); outline: none; transition: border-color .12s; }
+.pin-char:focus { border-color: var(--green); }
+.pin-hint { font-size: 11px; color: var(--text3); text-align: center; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+
+<!-- Loading overlay (shown while fetching from Firestore) -->
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loading-text">Connecting to database...</div>
+</div>
+
+<div class="app">
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+    </div>
+    <div><div class="logo-text">Skill Tracker</div><div class="logo-sub">Ophthalmic Technician</div></div>
+  </div>
+  <div class="sl">Program</div>
+  <div class="sidebar-actions">
+    <button class="sb-btn" onclick="showView('overview')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Overview
+    </button>
+  </div>
+  <div class="sl">Candidates</div>
+  <div class="candidates-list" id="candidates-list"></div>
+  <div class="sidebar-footer">
+    <div class="sync-bar">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-label">Not connected</span>
+    </div>
+    <button class="sb-btn primary" onclick="openAddModal()">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add candidate
+    </button>
+    <button class="sb-btn" onclick="openImport()">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import program
+    </button>
+    <button class="sb-btn" onclick="openChangePasscode()">
+      <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+      Change passcode
+    </button>
+    <button class="sb-btn" onclick="exportProgram()">
+      <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export backup
+    </button>
+  </div>
+</aside>
+
+<!-- Main -->
+<div class="main-area">
+  <div class="topbar">
+    <span class="topbar-name" id="topbar-name">Skill Tracker</span>
+    <span class="topbar-meta" id="topbar-meta"></span>
+    <div class="topbar-actions" id="topbar-actions"></div>
+  </div>
+  <div class="content" id="content"></div>
+</div>
+</div>
+
+<!-- Add Candidate Modal -->
+<div class="backdrop" id="modal-add">
+  <div class="modal">
+    <h3>Add candidate</h3>
+    <div class="modal-row"><label class="modal-label">Full name</label><input class="modal-input" id="add-name" placeholder="e.g. Jane Smith" onkeydown="if(event.key==='Enter')confirmAdd()"></div>
+    <div class="modal-row"><label class="modal-label">Start date</label><input class="modal-input" id="add-start" type="date"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-add')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAdd()">Add candidate</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="backdrop" id="modal-import">
+  <div class="modal">
+    <h3>Import program data</h3>
+    <p>Load a previously exported <code>.json</code> backup file. This replaces all current data in the database.</p>
+    <div class="drop-area" id="drop-area" onclick="document.getElementById('file-input').click()">
+      <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Click to select file, or drag and drop here
+    </div>
+    <input type="file" id="file-input" accept=".json" style="display:none" onchange="loadFile(this)">
+    <div class="modal-actions"><button class="btn" onclick="closeModal('modal-import')">Cancel</button></div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="backdrop" id="modal-delete">
+  <div class="modal">
+    <h3>Remove candidate</h3>
+    <p id="delete-msg"></p>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-delete')">Cancel</button>
+      <button class="btn" style="background:var(--red-bg);color:var(--red);border-color:#f0a090" onclick="confirmDelete()">Remove</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lock Screen -->
+<div id="lock-screen">
+  <div class="lock-card">
+    <div class="lock-icon"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+    <div class="lock-title">Skill Tracker</div>
+    <div class="lock-sub">Enter your passcode to continue</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="dot-0"></div><div class="pin-dot" id="dot-1"></div>
+      <div class="pin-dot" id="dot-2"></div><div class="pin-dot" id="dot-3"></div>
+    </div>
+    <div class="numpad">
+      <button class="num-btn" onclick="numPress('1')">1</button>
+      <button class="num-btn" onclick="numPress('2')">2<div class="num-sub">ABC</div></button>
+      <button class="num-btn" onclick="numPress('3')">3<div class="num-sub">DEF</div></button>
+      <button class="num-btn" onclick="numPress('4')">4<div class="num-sub">GHI</div></button>
+      <button class="num-btn" onclick="numPress('5')">5<div class="num-sub">JKL</div></button>
+      <button class="num-btn" onclick="numPress('6')">6<div class="num-sub">MNO</div></button>
+      <button class="num-btn" onclick="numPress('7')">7<div class="num-sub">PQRS</div></button>
+      <button class="num-btn" onclick="numPress('8')">8<div class="num-sub">TUV</div></button>
+      <button class="num-btn" onclick="numPress('9')">9<div class="num-sub">WXYZ</div></button>
+      <button class="num-btn zero-btn" onclick="numPress('0')">0</button>
+      <button class="num-btn del-btn" onclick="numDel()">&#x232B;</button>
+    </div>
+    <div class="lock-err" id="lock-err"></div>
+    <div class="lock-footer">Ophthalmic Technician Program</div>
+  </div>
+</div>
+
+<!-- Change Passcode Modal -->
+<div class="backdrop" id="modal-passcode">
+  <div class="modal">
+    <h3>Change passcode</h3>
+    <p>Enter your current passcode, then set a new 4-digit PIN.</p>
+    <div class="modal-row"><label class="modal-label">Current passcode</label>
+      <div class="pin-input-row">
+        <input class="pin-char" id="cur0" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cur',0)">
+        <input class="pin-char" id="cur1" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cur',1)">
+        <input class="pin-char" id="cur2" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cur',2)">
+        <input class="pin-char" id="cur3" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cur',3)">
+      </div>
+    </div>
+    <div class="modal-row"><label class="modal-label">New passcode</label>
+      <div class="pin-input-row">
+        <input class="pin-char" id="new0" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('new',0)">
+        <input class="pin-char" id="new1" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('new',1)">
+        <input class="pin-char" id="new2" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('new',2)">
+        <input class="pin-char" id="new3" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('new',3)">
+      </div>
+    </div>
+    <div class="modal-row"><label class="modal-label">Confirm new passcode</label>
+      <div class="pin-input-row">
+        <input class="pin-char" id="cnf0" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cnf',0)">
+        <input class="pin-char" id="cnf1" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cnf',1)">
+        <input class="pin-char" id="cnf2" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cnf',2)">
+        <input class="pin-char" id="cnf3" maxlength="1" type="password" inputmode="numeric" oninput="pinNav('cnf',3)">
+      </div>
+    </div>
+    <div class="pin-hint" id="pin-change-err" style="color:var(--red);min-height:16px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('modal-passcode')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmChangePasscode()">Update passcode</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+//  FIREBASE CONFIG
+// ══════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyDSApTVsZ5ArR4NIywwJmx4aPyWLhl7qPs",
+  authDomain: "technician-training-d7420.firebaseapp.com",
+  projectId: "technician-training-d7420",
+  storageBucket: "technician-training-d7420.firebasestorage.app",
+  messagingSenderId: "529767634697",
+  appId: "1:529767634697:web:239078a9924c9d5d6a25d8"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const DOC_REF = db.collection('tracker').doc('program');
+
+// ══════════════════════════════════════════
+//  APP DATA
+// ══════════════════════════════════════════
+var pinBuffer = '';
+var saveTimer = null;
+
+const SECTIONS = [
+  { id:'retina', label:'Retina / General', color:'#1D9E75',
+    skills:['Macula OCT','Visual Acuity','Pupils','EOM','CVF','Amsler Grid','Tonopen IOP','Pull injections / check auth','Fundus photos','Fundus photos for FA','Venipuncture','AF photos','Optos photos','Set up and save B-scan','Autoclave'] },
+  { id:'medcomp', label:'Med Comp', color:'#1d5fa8',
+    skills:['Lensometer','Applanation','Visual Field','Cirrus OCT - RNFL','Heidelberg RNFL','Dominant Eye','Autorefractor','Manifest Refraction','Check angles','ERx','Check auth for procedures (AMT/Punctal plugs)','Med Prior Auth'] },
+  { id:'comp', label:'Comp', color:'#5b3fa8',
+    skills:['IOL Master','Topography','A-scan','Pentacam','Check auth for procedures (SLT, YAG, LPI)'] }
+];
+const TOTAL = SECTIONS.reduce((a,s)=>a+s.skills.length,0);
+const COLORS = [
+  ['#e8f5ee','#2d7a4f'],['#e8f0fb','#1d5fa8'],['#eeebfb','#5b3fa8'],
+  ['#fef3e0','#b45309'],['#fdf0ee','#c0392b'],['#e0f7f5','#0f766e'],
+  ['#fce7f3','#9d174d'],['#f3e8ff','#6b21a8']
+];
+
+let prog = { candidates: [] };
+let activeId = null;
+let view = 'overview';
+let pendingDel = null;
+
+function freshSkill() { return {status:'none',preceptor:'',signOffDate:'',attempts:0,confidence:0,flag:'none',notes:''}; }
+function freshCandidate(name, startDate) {
+  const id = 'c' + Date.now() + Math.random().toString(36).slice(2,6);
+  const colorIdx = prog.candidates.length % COLORS.length;
+  const skills = {};
+  SECTIONS.forEach(s => { skills[s.id]={open:true,items:{}}; s.skills.forEach(sk=>{ skills[s.id].items[sk]=freshSkill(); }); });
+  return { id, name: name||'New Candidate', startDate: startDate||'', colorIdx, skills };
+}
+function getC(id) { return prog.candidates.find(c=>c.id===id); }
+function sd(cid,secId,sk) { return getC(cid).skills[secId].items[sk]; }
+function candProg(cid) {
+  const c=getC(cid); if(!c) return {can:0,total:TOTAL,pct:0};
+  let can=0; SECTIONS.forEach(s=>s.skills.forEach(sk=>{ if(c.skills[s.id].items[sk].status==='can') can++; }));
+  return {can, total:TOTAL, pct:Math.round(can/TOTAL*100)};
+}
+function secProg(cid,secId) {
+  const c=getC(cid); const s=SECTIONS.find(x=>x.id===secId);
+  const done=s.skills.filter(sk=>c.skills[secId].items[sk].status==='can').length;
+  return {done, total:s.skills.length, pct:Math.round(done/s.skills.length*100)};
+}
+function initials(name) { return name.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
+function daysIn(d) { if(!d) return null; return Math.max(0,Math.floor((Date.now()-new Date(d))/86400000)); }
+function k(cid,secId,sk) { return (cid+'_'+secId+'_'+sk).replace(/[^a-zA-Z0-9_]/g,'_'); }
+
+function mergeCandidate(c) {
+  const m = {...freshCandidate(c.name,c.startDate),...c};
+  SECTIONS.forEach(sec => {
+    if(!m.skills[sec.id]) m.skills[sec.id]={open:true,items:{}};
+    sec.skills.forEach(sk=>{ if(!m.skills[sec.id].items[sk]) m.skills[sec.id].items[sk]=freshSkill(); });
+  });
+  return m;
+}
+
+// ══════════════════════════════════════════
+//  SYNC — Firebase + localStorage fallback
+// ══════════════════════════════════════════
+
+function setSyncStatus(state, label) {
+  const dot = document.getElementById('sync-dot');
+  const lbl = document.getElementById('sync-label');
+  if (dot) { dot.className = 'sync-dot' + (state ? ' '+state : ''); }
+  if (lbl) lbl.textContent = label;
+}
+
+function cacheLocal() {
+  try { localStorage.setItem('opht_v3', JSON.stringify({prog, activeId, view})); } catch(e) {}
+}
+
+function autosave() {
+  cacheLocal();
+  setSyncStatus('syncing', 'Saving...');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await DOC_REF.set({ prog, _updated: new Date().toISOString() });
+      setSyncStatus('saved', 'Saved to cloud');
+      setTimeout(()=>setSyncStatus('saved','Cloud sync on'), 2500);
+    } catch(e) {
+      setSyncStatus('error', 'Sync error — saved locally');
+    }
+  }, 1200);
+}
+
+async function loadFromFirestore() {
+  try {
+    const doc = await DOC_REF.get();
+    if (doc.exists && doc.data().prog) {
+      const data = doc.data().prog;
+      if (Array.isArray(data.candidates)) {
+        prog.candidates = data.candidates.map(mergeCandidate);
+        return true;
+      }
+    }
+  } catch(e) { console.warn('Firestore load failed, using local cache', e); }
+  return false;
+}
+
+function loadFromCache() {
+  try {
+    const raw = localStorage.getItem('opht_v3'); if(!raw) return false;
+    const s = JSON.parse(raw);
+    if (s.prog && Array.isArray(s.prog.candidates)) {
+      prog.candidates = s.prog.candidates.map(mergeCandidate);
+      activeId = s.activeId||null; view = s.view||'overview'; return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+// ══════════════════════════════════════════
+//  EXPORT / IMPORT
+// ══════════════════════════════════════════
+function exportProgram() {
+  const blob = new Blob([JSON.stringify({_v:4,_date:new Date().toISOString(),prog},null,2)],{type:'application/json'});
+  dl(blob,'skill_tracker_backup.json'); toast('Backup exported');
+}
+function exportReport(cid) {
+  const c=getC(cid); if(!c) return;
+  const {can,total}=candProg(cid);
+  const days=daysIn(c.startDate);
+  let atts=0; SECTIONS.forEach(s=>s.skills.forEach(sk=>{ atts+=(c.skills[s.id].items[sk].attempts||0); }));
+  const ln=[];
+  ln.push('OPHTHALMIC TECHNICIAN SKILL ASSESSMENT','='.repeat(54));
+  ln.push('Technician : '+c.name);
+  if(c.startDate) ln.push('Start date : '+c.startDate);
+  ln.push('Report date: '+new Date().toLocaleDateString());
+  if(days!==null) ln.push('Days in training: '+days);
+  ln.push('','Overall progress : '+can+'/'+total+' mastered ('+Math.round(can/total*100)+'%)','Total practice reps: '+atts,'');
+  SECTIONS.forEach(s=>{
+    const{done,total:t}=secProg(cid,s.id);
+    ln.push('─'.repeat(54),s.label.toUpperCase()+'  —  '+done+'/'+t+' mastered','');
+    s.skills.forEach(sk=>{
+      const d=c.skills[s.id].items[sk];
+      const st=d.status==='can'?'[MASTERED]':d.status==='needs'?'[TRAINING]':'[PENDING ]';
+      const fl=d.flag==='red'?' 🔴':d.flag==='yellow'?' 🟡':'';
+      ln.push('  '+st+fl+' '+sk);
+      ln.push('             Attempts: '+d.attempts+'   Confidence: '+(d.confidence>0?'★'.repeat(d.confidence)+'☆'.repeat(3-d.confidence):'—'));
+      if(d.preceptor||d.signOffDate) ln.push('             Preceptor: '+(d.preceptor||'—')+'   Sign-off: '+(d.signOffDate||'—'));
+      if(d.notes) ln.push('             Notes: '+d.notes);
+      ln.push('');
+    });
+  });
+  ln.push('='.repeat(54),can+'/'+total+' mastered  |  '+atts+' total reps');
+  dl(new Blob([ln.join('\n')],{type:'text/plain'}),c.name.replace(/\s+/g,'_')+'_skill_report.txt');
+  toast('Report exported');
+}
+function dl(blob,fn){ const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=fn;a.click();URL.revokeObjectURL(u); }
+
+function openImport(){ document.getElementById('modal-import').classList.add('open'); }
+function loadFile(input) {
+  const file=input.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try {
+      const data=JSON.parse(e.target.result);
+      if(!data.prog||!Array.isArray(data.prog.candidates)) throw new Error();
+      prog.candidates=data.prog.candidates.map(mergeCandidate);
+      activeId=null; view='overview';
+      autosave(); render(); closeModal('modal-import');
+      toast('Imported '+prog.candidates.length+' candidate(s) — syncing to cloud...');
+    } catch(e){ toast('Error: invalid file format'); }
+    input.value='';
+  };
+  r.readAsText(file);
+}
+const da=document.getElementById('drop-area');
+da.addEventListener('dragover',e=>{e.preventDefault();da.classList.add('drag-over');});
+da.addEventListener('dragleave',()=>da.classList.remove('drag-over'));
+da.addEventListener('drop',e=>{e.preventDefault();da.classList.remove('drag-over');document.getElementById('file-input').files=e.dataTransfer.files;loadFile(document.getElementById('file-input'));});
+
+// ══════════════════════════════════════════
+//  MODALS
+// ══════════════════════════════════════════
+function openAddModal(){ document.getElementById('add-name').value=''; document.getElementById('add-start').value=''; document.getElementById('modal-add').classList.add('open'); setTimeout(()=>document.getElementById('add-name').focus(),80); }
+function confirmAdd(){
+  const name=document.getElementById('add-name').value.trim();
+  if(!name){document.getElementById('add-name').focus();return;}
+  const c=freshCandidate(name,document.getElementById('add-start').value);
+  prog.candidates.push(c); activeId=c.id; view='candidate';
+  autosave(); render(); closeModal('modal-add'); toast(name+' added');
+}
+function askDelete(cid){
+  pendingDel=cid;
+  document.getElementById('delete-msg').textContent='Remove "'+getC(cid).name+'"? All their skill data will be permanently deleted.';
+  document.getElementById('modal-delete').classList.add('open');
+}
+function confirmDelete(){
+  prog.candidates=prog.candidates.filter(c=>c.id!==pendingDel);
+  if(activeId===pendingDel){activeId=null;view='overview';}
+  pendingDel=null; autosave(); render(); closeModal('modal-delete'); toast('Candidate removed');
+}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.backdrop').forEach(b=>b.addEventListener('click',e=>{if(e.target===b)b.classList.remove('open');}));
+
+// ══════════════════════════════════════════
+//  SKILL ACTIONS
+// ══════════════════════════════════════════
+function cycleStatus(cid,secId,sk){
+  const d=sd(cid,secId,sk);
+  d.status=d.status==='none'?'needs':d.status==='needs'?'can':'none';
+  if(d.status==='can'&&!d.signOffDate) d.signOffDate=new Date().toISOString().slice(0,10);
+  autosave(); renderCandidate(cid);
+}
+function setField(cid,secId,sk,field,val){sd(cid,secId,sk)[field]=val;autosave();updateSidebar();updateBars(cid);}
+function changeAttempts(cid,secId,sk,delta){
+  const d=sd(cid,secId,sk); d.attempts=Math.max(0,(d.attempts||0)+delta); autosave();
+  const el=document.getElementById('att-'+k(cid,secId,sk)); if(el) el.textContent=d.attempts;
+  updateTopMeta(cid); updateSidebar();
+}
+function setConf(cid,secId,sk,val){
+  const d=sd(cid,secId,sk); d.confidence=d.confidence===val?0:val; autosave();
+  const key=k(cid,secId,sk);
+  for(let i=1;i<=3;i++){const el=document.getElementById('star-'+key+'-'+i);if(el)el.className='star'+(i<=d.confidence?' on':'');}
+}
+function setFlag(cid,secId,sk,flag){
+  const d=sd(cid,secId,sk); d.flag=d.flag===flag?'none':flag; autosave();
+  const key=k(cid,secId,sk);
+  const row=document.getElementById('row-'+key); if(row) row.className=d.flag==='red'?'flag-red':d.flag==='yellow'?'flag-yellow':'';
+  const rb=document.getElementById('fr-'+key); if(rb) rb.className='flag-btn'+(d.flag==='red'?' on':'');
+  const yb=document.getElementById('fy-'+key); if(yb) yb.className='flag-btn'+(d.flag==='yellow'?' on':'');
+}
+function toggleSec(cid,secId){getC(cid).skills[secId].open=!getC(cid).skills[secId].open;autosave();renderCandidate(cid);}
+
+// ══════════════════════════════════════════
+//  LIVE UI UPDATES
+// ══════════════════════════════════════════
+function updateSidebar(){
+  prog.candidates.forEach(c=>{const{can,total}=candProg(c.id);const el=document.getElementById('cprog-'+c.id);if(el)el.textContent=can+'/'+total;});
+}
+function updateBars(cid){
+  SECTIONS.forEach(s=>{
+    const{done,total,pct}=secProg(cid,s.id);
+    const bar=document.getElementById('pb-'+cid+'-'+s.id); if(bar) bar.style.width=pct+'%';
+    const cnt=document.getElementById('pc-'+cid+'-'+s.id); if(cnt) cnt.textContent=done+'/'+total;
+  });
+  updateTopMeta(cid); updateSidebar();
+}
+function updateTopMeta(cid){
+  if(view!=='candidate') return;
+  const{can,total,pct}=candProg(cid);
+  const el=document.getElementById('topbar-meta'); if(el) el.textContent=can+'/'+total+' mastered · '+pct+'%';
+  let needs=0,notStarted=0,atts=0;
+  SECTIONS.forEach(s=>s.skills.forEach(sk=>{const st=getC(cid).skills[s.id].items[sk].status;if(st==='needs')needs++;if(st==='none')notStarted++;atts+=(getC(cid).skills[s.id].items[sk].attempts||0);}));
+  const sv1=document.getElementById('sv1'),sv2=document.getElementById('sv2'),sv3=document.getElementById('sv3'),sv4=document.getElementById('sv4');
+  if(sv1)sv1.textContent=can;if(sv2)sv2.textContent=needs;if(sv3)sv3.textContent=notStarted;if(sv4)sv4.textContent=atts;
+}
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+function showView(v,cid){view=v;if(cid)activeId=cid;cacheLocal();render();}
+function render(){renderSidebar();if(view==='candidate'&&activeId)renderCandidate(activeId);else renderOverview();}
+
+function renderSidebar(){
+  const list=document.getElementById('candidates-list'); list.innerHTML='';
+  if(!prog.candidates.length){list.innerHTML='<div style="padding:.5rem .5rem;font-size:11px;color:var(--text3);text-align:center;line-height:1.5">No candidates yet.<br>Add one below.</div>';return;}
+  prog.candidates.forEach(c=>{
+    const[bg,fg]=COLORS[c.colorIdx%COLORS.length];
+    const{can,total}=candProg(c.id);
+    const isActive=c.id===activeId&&view==='candidate';
+    const div=document.createElement('div'); div.className='cand-item'+(isActive?' active':'');
+    div.innerHTML=`<button class="cand-btn" onclick="showView('candidate','${c.id}')">
+      <div class="cand-avatar" style="background:${bg};color:${fg}">${initials(c.name)}</div>
+      <div><div class="cand-name">${c.name}</div><div class="cand-prog" id="cprog-${c.id}">${can}/${total}</div></div>
+    </button>
+    <button class="cand-del" onclick="askDelete('${c.id}')" title="Remove">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>
+    </button>`;
+    list.appendChild(div);
+  });
+}
+
+function renderOverview(){
+  document.getElementById('topbar-name').textContent='Program overview';
+  document.getElementById('topbar-meta').textContent=prog.candidates.length+' candidate'+(prog.candidates.length!==1?'s':'');
+  document.getElementById('topbar-actions').innerHTML=`<button class="btn btn-primary" onclick="openAddModal()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add candidate</button>`;
+  const c=document.getElementById('content');
+  if(!prog.candidates.length){ c.innerHTML=`<div class="empty-state"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg><h2>No candidates yet</h2><p>Add your first candidate to start tracking skill progress.</p></div>`; return; }
+  let tCan=0,tPoss=0,tAtts=0;
+  prog.candidates.forEach(c=>{const{can,total}=candProg(c.id);tCan+=can;tPoss+=total;SECTIONS.forEach(s=>s.skills.forEach(sk=>{tAtts+=(c.skills[s.id].items[sk].attempts||0);}));});
+  const avgPct=tPoss?Math.round(tCan/tPoss*100):0;
+  const full=prog.candidates.filter(c=>candProg(c.id).pct===100).length;
+  c.innerHTML=`<div class="stats-grid" style="margin-bottom:1.25rem">
+    <div class="stat-card"><div class="stat-label">Candidates</div><div class="stat-value">${prog.candidates.length}</div><div class="stat-sub">${full} fully mastered</div></div>
+    <div class="stat-card"><div class="stat-label">Avg progress</div><div class="stat-value">${avgPct}%</div><div class="stat-sub">across all candidates</div></div>
+    <div class="stat-card"><div class="stat-label">Skills mastered</div><div class="stat-value">${tCan}</div><div class="stat-sub">of ${tPoss} total</div></div>
+    <div class="stat-card"><div class="stat-label">Total reps</div><div class="stat-value">${tAtts}</div><div class="stat-sub">practice attempts</div></div>
+  </div><div class="ov-grid" id="ov-grid"></div>`;
+  const grid=document.getElementById('ov-grid');
+  prog.candidates.forEach(c=>{
+    const[bg,fg]=COLORS[c.colorIdx%COLORS.length];
+    const{can,total,pct}=candProg(c.id);
+    const days=daysIn(c.startDate);
+    let atts=0; SECTIONS.forEach(s=>s.skills.forEach(sk=>{atts+=(c.skills[s.id].items[sk].attempts||0);}));
+    const div=document.createElement('div'); div.className='ov-card'; div.onclick=()=>showView('candidate',c.id);
+    div.innerHTML=`<div class="ov-avatar" style="background:${bg};color:${fg}">${initials(c.name)}</div>
+      <div class="ov-name">${c.name}</div>
+      <div class="ov-date">${c.startDate?'Started '+c.startDate+(days!==null?' · '+days+'d':''):'No start date'}</div>
+      <div class="ov-bar-track"><div class="ov-bar-fill" style="background:${fg};width:${pct}%"></div></div>
+      <div class="ov-pct">${can}/${total} mastered · ${pct}%</div>
+      <div style="margin-top:.4rem;font-size:11px;color:var(--text3)">${atts} practice reps</div>`;
+    grid.appendChild(div);
+  });
+}
+
+function renderCandidate(cid){
+  const c=getC(cid); if(!c){renderOverview();return;}
+  const{can,total,pct}=candProg(cid);
+  const days=daysIn(c.startDate);
+  let atts=0,needs=0,notStarted=0;
+  SECTIONS.forEach(s=>s.skills.forEach(sk=>{const d=c.skills[s.id].items[sk];atts+=(d.attempts||0);if(d.status==='needs')needs++;if(d.status==='none')notStarted++;}));
+  document.getElementById('topbar-name').textContent=c.name;
+  document.getElementById('topbar-meta').textContent=can+'/'+total+' mastered · '+pct+'%';
+  document.getElementById('topbar-actions').innerHTML=`<button class="btn" onclick="exportReport('${cid}')"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>Export report</button>`;
+  let html=`<div class="edit-bar">
+    <div class="ef"><label>Full name</label><input value="${c.name}" placeholder="Name" style="width:180px" oninput="getC('${cid}').name=this.value;autosave();renderSidebar();document.getElementById('topbar-name').textContent=this.value"></div>
+    <div class="ef"><label>Start date</label><input type="date" value="${c.startDate}" style="width:148px" onchange="getC('${cid}').startDate=this.value;autosave()"></div>
+    <div style="flex:1"></div>
+    <div style="text-align:right"><div class="stat-label">Progress</div><div style="font-size:20px;font-weight:600;letter-spacing:-.02em">${pct}%</div><div style="font-size:11px;color:var(--text3)">${can}/${total} skills · ${atts} reps${days!==null?' · '+days+'d':''}</div></div>
+  </div>`;
+  html+=`<div class="stats-grid">
+    <div class="stat-card"><div class="stat-label">Mastered</div><div class="stat-value" id="sv1">${can}</div><div class="stat-sub">skills signed off</div></div>
+    <div class="stat-card"><div class="stat-label">In training</div><div class="stat-value" id="sv2">${needs}</div><div class="stat-sub">actively practicing</div></div>
+    <div class="stat-card"><div class="stat-label">Not started</div><div class="stat-value" id="sv3">${notStarted}</div><div class="stat-sub">of ${total} total</div></div>
+    <div class="stat-card"><div class="stat-label">Practice reps</div><div class="stat-value" id="sv4">${atts}</div><div class="stat-sub">${days!==null?days+' days in training':'set start date above'}</div></div>
+  </div>`;
+  html+=`<div class="legend"><strong>Legend &nbsp;</strong> 🔴 Needs immediate attention &nbsp;&nbsp; 🟡 Follow up soon &nbsp;&nbsp; ⭐ Confidence (1–3 stars) &nbsp;&nbsp; # Attempts</div>`;
+  SECTIONS.forEach(s=>{
+    const{done,total:st,pct:sp}=secProg(cid,s.id);
+    const isOpen=c.skills[s.id].open;
+    let tableHTML='';
+    if(isOpen){
+      let rows='';
+      s.skills.forEach(sk=>{
+        const d=c.skills[s.id].items[sk];
+        const key=k(cid,s.id,sk);
+        const rowCls=d.flag==='red'?'flag-red':d.flag==='yellow'?'flag-yellow':'';
+        const btnCls=d.status==='can'?'status-btn st-can':d.status==='needs'?'status-btn st-needs':'status-btn st-none';
+        const ico=d.status==='can'
+          ?`<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"><polyline points="20 6 9 17 4 12"/></svg>`
+          :d.status==='needs'
+          ?`<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`
+          :`<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round"><circle cx="12" cy="12" r="10"/></svg>`;
+        const txt=d.status==='can'?'Can perform':d.status==='needs'?'Needs training':'Not started';
+        const skS=sk.replace(/'/g,"\\'");
+        const stars=[1,2,3].map(i=>`<span class="star${i<=d.confidence?' on':''}" id="star-${key}-${i}" onclick="setConf('${cid}','${s.id}','${skS}',${i})" title="Confidence ${i}">★</span>`).join('');
+        rows+=`<tr id="row-${key}" class="${rowCls}">
+          <td style="width:50px"><div class="flags">
+            <button class="flag-btn${d.flag==='red'?' on':''}" id="fr-${key}" onclick="setFlag('${cid}','${s.id}','${skS}','red')" title="Needs attention">🔴</button>
+            <button class="flag-btn${d.flag==='yellow'?' on':''}" id="fy-${key}" onclick="setFlag('${cid}','${s.id}','${skS}','yellow')" title="Follow up">🟡</button>
+          </div></td>
+          <td style="min-width:155px"><span class="skill-name">${sk}</span></td>
+          <td style="min-width:125px"><button class="${btnCls}" onclick="cycleStatus('${cid}','${s.id}','${skS}')">${ico}${txt}</button></td>
+          <td style="width:80px"><div class="att-wrap">
+            <button class="att-btn" onclick="changeAttempts('${cid}','${s.id}','${skS}',-1)">−</button>
+            <span class="att-count" id="att-${key}">${d.attempts}</span>
+            <button class="att-btn" onclick="changeAttempts('${cid}','${s.id}','${skS}',1)">+</button>
+          </div></td>
+          <td style="width:70px"><div class="stars">${stars}</div></td>
+          <td style="min-width:120px"><input class="cell-input" placeholder="Preceptor name" value="${d.preceptor||''}" oninput="setField('${cid}','${s.id}','${skS}','preceptor',this.value)"></td>
+          <td style="width:130px"><input type="date" class="date-input" value="${d.signOffDate||''}" onchange="setField('${cid}','${s.id}','${skS}','signOffDate',this.value)"></td>
+          <td style="min-width:140px"><input class="cell-input" placeholder="Comments..." value="${d.notes||''}" oninput="setField('${cid}','${s.id}','${skS}','notes',this.value)"></td>
+        </tr>`;
+      });
+      tableHTML=`<div class="table-wrap"><table><thead><tr><th>Flag</th><th>Skill</th><th>Status</th><th>Attempts</th><th>Confidence</th><th>Preceptor</th><th>Sign-off date</th><th>Comments</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    }
+    html+=`<div class="section-card"><div class="section-header${isOpen?' open':''}" onclick="toggleSec('${cid}','${s.id}')">
+      <div class="sdot" style="background:${s.color}"></div>
+      <span class="section-title">${s.label}</span>
+      <div class="prog-track"><div class="prog-fill" id="pb-${cid}-${s.id}" style="background:${s.color};width:${sp}%"></div></div>
+      <span class="section-count" id="pc-${cid}-${s.id}">${done}/${st}</span>
+      <svg class="chevron${isOpen?' open':''}" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>${tableHTML}</div>`;
+  });
+  document.getElementById('content').innerHTML=html;
+}
+
+function toast(msg,dur=2300){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+
+// ══════════════════════════════════════════
+//  PASSCODE SYSTEM
+//  Default PIN: 1234  (SHA-256 stored in localStorage)
+// ══════════════════════════════════════════
+const DEFAULT_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
+const LOCK_KEY='opht_passcode_hash';
+const SESSION_KEY='opht_unlocked';
+
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function getStoredHash(){return localStorage.getItem(LOCK_KEY)||DEFAULT_HASH;}
+
+function numPress(d){if(pinBuffer.length>=4)return;pinBuffer+=d;updateDots();if(pinBuffer.length===4)setTimeout(checkPin,120);}
+function numDel(){pinBuffer=pinBuffer.slice(0,-1);updateDots();clearLockErr();}
+function updateDots(state){for(let i=0;i<4;i++){const dot=document.getElementById('dot-'+i);if(!dot)return;dot.className='pin-dot'+(state==='error'?' error':(i<pinBuffer.length?' filled':''));}}
+function clearLockErr(){document.getElementById('lock-err').textContent='';}
+
+async function bootApp() {
+  document.getElementById('loading-overlay').classList.remove('hidden');
+  document.getElementById('loading-text').textContent='Loading from cloud...';
+  const fromCloud = await loadFromFirestore();
+  if (!fromCloud) {
+    document.getElementById('loading-text').textContent='Using local data...';
+    loadFromCache();
+  }
+  document.getElementById('loading-overlay').classList.add('hidden');
+  setSyncStatus('saved','Cloud sync on');
+  render();
+  if(prog.candidates.length>0) toast('Loaded '+prog.candidates.length+' candidate(s)');
+}
+
+async function checkPin(){
+  const hash=await sha256(pinBuffer);
+  if(hash===getStoredHash()){
+    sessionStorage.setItem(SESSION_KEY,'1');
+    document.getElementById('lock-screen').classList.add('hidden');
+    await bootApp();
+  } else {
+    updateDots('error');
+    document.getElementById('lock-err').textContent='Incorrect passcode. Try again.';
+    setTimeout(()=>{pinBuffer='';updateDots();clearLockErr();},900);
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(document.getElementById('lock-screen').classList.contains('hidden')) return;
+  if(e.key>='0'&&e.key<='9') numPress(e.key);
+  else if(e.key==='Backspace') numDel();
+});
+
+function pinNav(prefix,idx){const val=document.getElementById(prefix+idx).value;if(val&&idx<3)document.getElementById(prefix+(idx+1)).focus();}
+function openChangePasscode(){['cur','new','cnf'].forEach(p=>{for(let i=0;i<4;i++)document.getElementById(p+i).value='';});document.getElementById('pin-change-err').textContent='';document.getElementById('modal-passcode').classList.add('open');setTimeout(()=>document.getElementById('cur0').focus(),80);}
+async function confirmChangePasscode(){
+  const getPin=p=>[0,1,2,3].map(i=>document.getElementById(p+i).value).join('');
+  const cur=getPin('cur'),nw=getPin('new'),cnf=getPin('cnf');
+  const errEl=document.getElementById('pin-change-err');
+  if(cur.length<4||nw.length<4||cnf.length<4){errEl.textContent='All fields must be 4 digits.';return;}
+  if(nw!==cnf){errEl.textContent='New passcodes do not match.';return;}
+  const curHash=await sha256(cur);
+  if(curHash!==getStoredHash()){errEl.textContent='Current passcode is incorrect.';return;}
+  localStorage.setItem(LOCK_KEY,await sha256(nw));
+  closeModal('modal-passcode'); toast('Passcode updated');
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+if(sessionStorage.getItem(SESSION_KEY)==='1'){
+  document.getElementById('lock-screen').classList.add('hidden');
+  bootApp();
+} else {
+  document.getElementById('loading-overlay').classList.add('hidden');
+}
+</script>
+</body>
+</html>
